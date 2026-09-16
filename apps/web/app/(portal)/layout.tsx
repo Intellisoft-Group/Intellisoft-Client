@@ -34,6 +34,16 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
     setReady(true);
   }, [router]);
 
+  useEffect(() => {
+    const sync = () => {
+      const u = getUser();
+      if (u && u.role === 'CLIENT') setUser(u);
+    };
+    sync();
+    window.addEventListener('is-session-updated', sync);
+    return () => window.removeEventListener('is-session-updated', sync);
+  }, [pathname]);
+
   useEffect(() => { setOpen(false); }, [pathname]);
 
   useEffect(() => {

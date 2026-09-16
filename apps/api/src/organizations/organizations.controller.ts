@@ -55,6 +55,16 @@ export class OrganizationsController {
   }
 
   @Roles(Role.SUPER_ADMIN, Role.SALES, Role.FINANCE)
+  @Patch(':id/users/:userId')
+  updateUser(
+    @Param('id') id: string,
+    @Param('userId') userId: string,
+    @Body() body: { name?: string; phone?: string | null },
+  ) {
+    return this.orgs.updateClientUser(id, userId, body);
+  }
+
+  @Roles(Role.SUPER_ADMIN, Role.SALES, Role.FINANCE)
   @Post(':id/users/:userId/password')
   setPassword(
     @Param('id') id: string,

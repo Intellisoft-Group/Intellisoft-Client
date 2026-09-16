@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
 import { Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { MailService } from '../mail/mail.service';
 import { AuthUser } from '../common/current-user.decorator';
 import { publicFileUrl } from '../common/utils';
 
@@ -23,6 +24,7 @@ export class UsersService implements OnModuleInit {
   constructor(
     private prisma: PrismaService,
     private config: ConfigService,
+    private mail: MailService,
   ) {}
 
   async onModuleInit() {
@@ -80,6 +82,40 @@ export class UsersService implements OnModuleInit {
     }).then((rows) => rows.map((r) => this.profile(r)));
   }
 
+  /** Any signed-in user can correct their own display name / phone. */
+  async updateMe(actor: AuthUser, body: { name?: string; phone?: string | null }) {
+    const data: Prisma.UserUpdateInput = {};
+    if (body.name !== undefined) {
+      const name = String(body.name || '').trim();
+      if (!name) throw new BadRequestException('Name is required');
+      data.name = name;
+    }
+    if (body.phone !== undefined) {
+      data.phone = String(body.phone || '').trim() || null;
+    }
+    if (Object.keys(data).length === 0) {
+      throw new BadRequestException('Nothing to update');
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id: actor.id },
+      data,
+      include: { organization: true },
+    });
+    const {
+      passwordHash: _p,
+      refreshTokenHash: _r,
+      resetToken: _t,
+      resetTokenExpires: _e,
+      expoPushToken: _x,
+      ...safe
+    } = updated;
+    return {
+      ...safe,
+      avatarUrl: publicFileUrl(this.apiUrl(), safe.avatarPath),
+    };
+  }
+
   async inviteStaff(body: {
     email: string;
     name: string;
@@ -112,9 +148,19 @@ export class UsersService implements OnModuleInit {
     return { id: user.id, email: user.email, temporaryPassword: body.password ? undefined : temp };
   }
 
-  async updateStaff(id: string, data: Prisma.UserUpdateInput & { jobTitle?: string }) {
+  async updateStaff(
+    id: string,
+    data: Prisma.UserUpdateInput & { jobTitle?: string },
+    actor?: AuthUser,
+  ) {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user || user.role === Role.CLIENT) throw new NotFoundException();
+    if (actor?.id === id && data.isActive === false) {
+      throw new BadRequestException('You cannot disable your own account');
+    }
+    if (data.role === Role.CLIENT) {
+      throw new BadRequestException('Cannot change a staff account to CLIENT');
+    }
     if (typeof data.jobTitle === 'string' && data.jobTitle.trim()) {
       await this.addTitle(data.jobTitle);
     }
@@ -130,6 +176,57 @@ export class UsersService implements OnModuleInit {
       select: { id: true, email: true, name: true, phone: true, role: true, jobTitle: true, avatarPath: true, isActive: true },
     });
     return this.profile(updated);
+  }
+
+  /** Super admin set/reset password for an internal staff user. */
+  async setStaffPassword(
+    id: string,
+    body: { password?: string; notify?: boolean },
+    actor?: AuthUser,
+  ) {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user || user.role === Role.CLIENT) throw new NotFoundException('Staff user not found');
+
+    const provided = String(body.password || '').trim();
+    if (provided && provided.length < 8) {
+      throw new BadRequestException('Password must be at least 8 characters');
+    }
+    const password = provided || `Staff@${Math.random().toString(36).slice(2, 10)}`;
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash,
+        mustChangePassword: !provided,
+        refreshTokenHash: null,
+        resetToken: null,
+        resetTokenExpires: null,
+      },
+    });
+
+    if (body.notify !== false) {
+      await this.mail.send(
+        user.email,
+        'Your Intellisoft staff password was updated',
+        this.mail.wrap(
+          'Password updated',
+          `<p>Hi ${user.name},</p><p>A super admin set a new password for your staff account (${user.email}).</p>${
+            provided
+              ? '<p>Use the password they shared with you to sign in to the CMS.</p>'
+              : `<p>Temporary password: <strong>${password}</strong></p><p>Change it after you sign in.</p>`
+          }${actor?.email ? `<p>Changed by: ${actor.email}</p>` : ''}`,
+        ),
+      );
+    }
+
+    return {
+      ok: true,
+      id: user.id,
+      email: user.email,
+      temporaryPassword: provided ? undefined : password,
+      passwordSetByStaff: !!provided,
+    };
   }
 
   async setAvatar(actor: AuthUser, userId: string, file: Express.Multer.File) {

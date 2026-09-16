@@ -41,6 +41,16 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   useEffect(() => {
+    const sync = () => {
+      const u = getUser();
+      if (u && u.role !== 'CLIENT') setUser(u);
+    };
+    sync();
+    window.addEventListener('is-session-updated', sync);
+    return () => window.removeEventListener('is-session-updated', sync);
+  }, [pathname]);
+
+  useEffect(() => {
     if (!user) return;
     if (!allowedPath(pathname, user.role)) {
       router.replace(homeFor(user.role));
@@ -116,11 +126,11 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
           ),
         )}
         <div className="spacer" />
-        <div className="user-chip">
+        <Link href="/profile" className={`user-chip ${pathname === '/profile' ? 'active' : ''}`} style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
           {user.name}
           <br />
           {user.role.replaceAll('_', ' ')}
-        </div>
+        </Link>
         <button
           className="btn ghost"
           style={{ color: '#fff', borderColor: 'rgba(255,255,255,.2)' }}

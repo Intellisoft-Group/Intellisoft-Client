@@ -62,6 +62,9 @@ export function setSession(accessToken: string, refreshToken: string, user: unkn
   localStorage.setItem('is_token', accessToken);
   localStorage.setItem('is_refresh', refreshToken);
   localStorage.setItem('is_user', JSON.stringify(mergeStoredUser(user)));
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('is-session-updated'));
+  }
 }
 
 /** Keep avatar/org when login/refresh returns a thinner user payload. */
@@ -70,7 +73,7 @@ function mergeStoredUser(incoming: unknown): unknown {
   const prev = getUser<Record<string, unknown>>();
   if (!prev) return incoming;
   const next = { ...prev, ...(incoming as Record<string, unknown>) };
-  for (const key of ['avatarUrl', 'avatarPath', 'organization', 'name', 'email', 'phone', 'jobTitle'] as const) {
+  for (const key of ['avatarUrl', 'avatarPath', 'organization'] as const) {
     const v = (incoming as Record<string, unknown>)[key];
     const blank = v == null || v === '' || (typeof v === 'object' && !Object.keys(v as object).length);
     if (blank && prev[key] != null && prev[key] !== '') next[key] = prev[key];

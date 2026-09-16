@@ -312,6 +312,39 @@ tr.clickable:hover { background: #f4f7fa; }
   padding: 12px 14px;
   font-size: 16px;
 }
+.login-card .password-input > input {
+  min-height: 48px;
+  padding: 12px 46px 12px 14px;
+  font-size: 16px;
+}
+.password-input {
+  position: relative;
+  display: block;
+}
+.password-input > input {
+  width: 100%;
+  padding-right: 46px;
+  box-sizing: border-box;
+}
+.password-toggle {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+.password-toggle:hover { color: var(--ink); background: var(--sand); }
+.password-toggle svg { display: block; }
 .login-card > .btn {
   min-height: 46px;
   font-size: 15px;
@@ -337,6 +370,24 @@ tr.clickable:hover { background: #f4f7fa; }
 .captcha-refresh svg { display: block; }
 
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.form-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  justify-content: flex-end;
+  min-width: 0;
+}
+.form-actions-label {
+  display: block;
+  font-size: 13px;
+  line-height: 1;
+  visibility: hidden;
+}
+.form-actions .btn {
+  align-self: flex-start;
+  width: auto;
+  white-space: nowrap;
+}
 .span-2 { grid-column: span 2; }
 
 .inbox { display: grid; grid-template-columns: 320px 1fr; gap: 0; min-height: 70vh; }

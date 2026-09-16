@@ -55,6 +55,7 @@ const NAV_CATALOG: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: '▣', roles: ADMIN },
   { href: '/desk', label: 'My desk', icon: '▣', roles: FIELD },
   { href: '/attendance', label: 'My attendance', icon: '◷', roles: ALL },
+  { href: '/profile', label: 'My profile', icon: '◎', roles: ALL },
   { href: '/team', label: 'Team attendance', icon: '♟', roles: ADMIN },
   { href: '/sales', label: 'Sales tracking', icon: '◈', roles: SALES_ADMIN },
 
@@ -107,6 +108,7 @@ const ROUTE_ROLES: { prefix: string; roles: StaffRole[] }[] = [
   { prefix: '/notifications', roles: CONTENT },
   { prefix: '/faqs', roles: SALES_ADMIN },
   { prefix: '/attendance', roles: ALL },
+  { prefix: '/profile', roles: ALL },
 ];
 
 function visibleTo(item: NavItem, role: StaffRole) {

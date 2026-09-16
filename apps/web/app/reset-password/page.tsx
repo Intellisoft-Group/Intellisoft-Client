@@ -5,6 +5,7 @@ import { FormEvent, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import { api } from '@/lib/api';
+import { PasswordField } from '@/components/PasswordField';
 
 function ResetInner() {
   const router = useRouter();
@@ -36,10 +37,14 @@ function ResetInner() {
         Reset token
         <input required value={token} onChange={(e) => setToken(e.target.value)} />
       </label>
-      <label className="field">
-        New password
-        <input type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} />
-      </label>
+      <PasswordField
+        label="New password"
+        required
+        minLength={8}
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        autoComplete="new-password"
+      />
       {error && <p className="error">{error}</p>}
       <button className="btn" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Update password'}</button>
       <Link href="/login" style={{ fontSize: 13, color: 'var(--teal)' }}>Back to sign in</Link>

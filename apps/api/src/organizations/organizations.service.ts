@@ -201,6 +201,39 @@ export class OrganizationsService {
     return { id: user.id, email: user.email, temporaryPassword: body.password ? undefined : temp };
   }
 
+  /** Staff rename / correct spelling for a CLIENT user on this organization. */
+  async updateClientUser(
+    organizationId: string,
+    userId: string,
+    body: { name?: string; phone?: string | null },
+  ) {
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, organizationId, role: Role.CLIENT },
+    });
+    if (!user) throw new NotFoundException('Client user not found');
+
+    const data: Prisma.UserUpdateInput = {};
+    if (body.name !== undefined) {
+      const name = String(body.name || '').trim();
+      if (!name) throw new BadRequestException('Name is required');
+      data.name = name;
+    }
+    if (body.phone !== undefined) {
+      data.phone = String(body.phone || '').trim() || null;
+    }
+    if (Object.keys(data).length === 0) {
+      throw new BadRequestException('Nothing to update');
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id: user.id },
+      data,
+      select: { id: true, email: true, name: true, phone: true, avatarPath: true },
+    });
+    const api = process.env.API_PUBLIC_URL || 'http://localhost:3000';
+    return { ...updated, avatarUrl: publicFileUrl(api, updated.avatarPath) };
+  }
+
   /**
    * Staff set or reset a CLIENT user's password for this organization.
    * Omit password to auto-generate a temporary one (returned once in the response).

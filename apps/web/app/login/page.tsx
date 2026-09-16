@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, clearSession, setSession } from '@/lib/api';
+import { PasswordField } from '@/components/PasswordField';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -50,10 +51,13 @@ export default function LoginPage() {
             Email
             <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required autoComplete="username" />
           </label>
-          <label className="field">
-            Password
-            <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" required autoComplete="current-password" />
-          </label>
+          <PasswordField
+            label="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            autoComplete="current-password"
+          />
           {error && <p className="error">{error}</p>}
           <button className="btn" disabled={busy} type="submit">
             {busy ? 'Signing in…' : 'Continue'}

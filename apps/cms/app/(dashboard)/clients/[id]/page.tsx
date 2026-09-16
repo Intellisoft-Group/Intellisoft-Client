@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api, getUser, money } from '@/lib/api';
 import { canSee, isAdmin, ROLE_GROUPS } from '@/lib/roles';
+import { PasswordField } from '@/components/PasswordField';
 
 export default function ClientDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -17,6 +18,10 @@ export default function ClientDetailPage() {
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
   const [staff, setStaff] = useState<any[]>([]);
   const [salesPersonId, setSalesPersonId] = useState('');
+  const [editOrg, setEditOrg] = useState({ name: '', legalName: '' });
+  const [orgMsg, setOrgMsg] = useState('');
+  const [orgError, setOrgError] = useState('');
+  const [savingOrg, setSavingOrg] = useState(false);
   const user = getUser();
   const admin = isAdmin(user?.role);
   const canProjects = canSee(user?.role, ROLE_GROUPS.delivery);
@@ -33,6 +38,13 @@ export default function ClientDetailPage() {
   useEffect(() => {
     setSalesPersonId(org?.salesPerson?.id || '');
   }, [org?.salesPerson?.id]);
+  useEffect(() => {
+    if (!org) return;
+    setEditOrg({
+      name: org.name || '',
+      legalName: org.legalName || '',
+    });
+  }, [org?.id, org?.name, org?.legalName]);
 
   async function sendInvite(e: React.FormEvent) {
     e.preventDefault();
@@ -50,6 +62,57 @@ export default function ClientDetailPage() {
       load();
     } catch (err: any) {
       setPwdError(err.message || 'Invite failed');
+    }
+  }
+
+  async function saveClientSpelling(e: React.FormEvent) {
+    e.preventDefault();
+    setOrgError('');
+    setOrgMsg('');
+    const name = editOrg.name.trim();
+    if (!name) {
+      setOrgError('Client name is required');
+      return;
+    }
+    setSavingOrg(true);
+    try {
+      const legalName = editOrg.legalName.trim() || name;
+      await api(`/organizations/${id}`, {
+        method: 'PATCH',
+        body: { name, legalName },
+      });
+      setOrgMsg('Client name updated');
+      load();
+    } catch (err: any) {
+      setOrgError(err.message || 'Could not update client name');
+    } finally {
+      setSavingOrg(false);
+    }
+  }
+
+  async function renameUser(userId: string, currentName: string) {
+    setPwdError('');
+    setPwdMsg('');
+    const entered = window.prompt('Correct client user name spelling:', currentName);
+    if (entered == null) return;
+    const name = entered.trim();
+    if (!name) {
+      setPwdError('Name is required');
+      return;
+    }
+    if (name === currentName) return;
+    setBusyUserId(userId);
+    try {
+      await api(`/organizations/${id}/users/${userId}`, {
+        method: 'PATCH',
+        body: { name },
+      });
+      setPwdMsg(`Name updated to "${name}"`);
+      load();
+    } catch (err: any) {
+      setPwdError(err.message || 'Could not update name');
+    } finally {
+      setBusyUserId(null);
     }
   }
 
@@ -105,6 +168,35 @@ export default function ClientDetailPage() {
         </div>
       </div>
       <div className="card stack" style={{ marginBottom: 16 }}>
+        {canManageUsers && (
+          <form className="form-grid" onSubmit={saveClientSpelling} style={{ marginBottom: 8 }}>
+            <label className="field">
+              Client name
+              <input
+                required
+                value={editOrg.name}
+                onChange={(e) => setEditOrg({ ...editOrg, name: e.target.value })}
+                placeholder="Company / client spelling"
+              />
+            </label>
+            <label className="field">
+              Legal name
+              <input
+                value={editOrg.legalName}
+                onChange={(e) => setEditOrg({ ...editOrg, legalName: e.target.value })}
+                placeholder="Optional — defaults to client name"
+              />
+            </label>
+            <div className="field form-actions">
+              <span className="form-actions-label" aria-hidden="true">&nbsp;</span>
+              <button className="btn sm" type="submit" disabled={savingOrg}>
+                {savingOrg ? 'Saving…' : 'Save name'}
+              </button>
+            </div>
+            {orgError && <p className="error" style={{ gridColumn: '1 / -1' }}>{orgError}</p>}
+            {orgMsg && <p style={{ gridColumn: '1 / -1', color: 'var(--ok)', fontSize: 13 }}><strong>{orgMsg}</strong></p>}
+          </form>
+        )}
         <p>{org.billingAddress}</p>
         <p className="ui" style={{ color: 'var(--muted)' }}>{org.city} {org.state} {org.pincode} · Place of supply: {org.placeOfSupply}</p>
         {org.notes && <p>{org.notes}</p>}
@@ -144,7 +236,7 @@ export default function ClientDetailPage() {
               <th>Email</th>
               <th>Phone</th>
               <th>Photo</th>
-              {canManageUsers && <th>Password</th>}
+              {canManageUsers && <th>Actions</th>}
             </tr>
           </thead>
           <tbody>
@@ -171,6 +263,14 @@ export default function ClientDetailPage() {
                 {canManageUsers && (
                   <td>
                     <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        className="btn sm ghost"
+                        disabled={busyUserId === u.id}
+                        onClick={() => renameUser(u.id, u.name || '')}
+                      >
+                        Edit name
+                      </button>
                       <button
                         type="button"
                         className="btn sm"
@@ -203,19 +303,17 @@ export default function ClientDetailPage() {
               <label className="field">Name<input required value={invite.name} onChange={(e) => setInvite({ ...invite, name: e.target.value })} /></label>
               <label className="field">Email<input required type="email" value={invite.email} onChange={(e) => setInvite({ ...invite, email: e.target.value })} /></label>
               <label className="field">Phone<input required value={invite.phone} onChange={(e) => setInvite({ ...invite, phone: e.target.value })} placeholder="Required for auto password" /></label>
-              <label className="field">
-                Password (optional)
-                <input
-                  type="text"
-                  minLength={8}
-                  autoComplete="off"
-                  placeholder="Blank = InSo + last 6 phone digits"
-                  value={invite.password}
-                  onChange={(e) => setInvite({ ...invite, password: e.target.value })}
-                />
-              </label>
-              <div className="field" style={{ justifyContent: 'flex-end' }}>
-                <button className="btn" type="submit">Invite client user</button>
+              <PasswordField
+                label="Password (optional)"
+                minLength={8}
+                autoComplete="off"
+                placeholder="Blank = InSo + last 6 phone digits"
+                value={invite.password}
+                onChange={(e) => setInvite({ ...invite, password: e.target.value })}
+              />
+              <div className="field form-actions">
+                <span className="form-actions-label" aria-hidden="true">&nbsp;</span>
+                <button className="btn sm" type="submit">Invite client user</button>
               </div>
             </form>
             {temp && <p>Invite password: <strong>{temp}</strong></p>}

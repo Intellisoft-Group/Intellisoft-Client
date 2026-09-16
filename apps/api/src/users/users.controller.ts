@@ -52,8 +52,23 @@ export class UsersController {
 
   @Roles(Role.SUPER_ADMIN)
   @Patch('staff/:id')
-  update(@Param('id') id: string, @Body() body: any) {
-    return this.users.updateStaff(id, body);
+  update(@Param('id') id: string, @Body() body: any, @CurrentUser() user: AuthUser) {
+    return this.users.updateStaff(id, body, user);
+  }
+
+  @Roles(Role.SUPER_ADMIN)
+  @Post('staff/:id/password')
+  setStaffPassword(
+    @Param('id') id: string,
+    @Body() body: { password?: string; notify?: boolean },
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.users.setStaffPassword(id, body, user);
+  }
+
+  @Patch('me')
+  updateMe(@CurrentUser() user: AuthUser, @Body() body: { name?: string; phone?: string | null }) {
+    return this.users.updateMe(user, body);
   }
 
   @Post('me/avatar')

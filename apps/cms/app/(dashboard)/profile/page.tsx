@@ -1,13 +1,10 @@
 'use client';
 
-import Image from 'next/image';
 import { FormEvent, useEffect, useState } from 'react';
-import { api, clearSession, fileUrl, getToken, getUser, setSession } from '@/lib/api';
-import { useRouter } from 'next/navigation';
+import { api, getToken, getUser, setSession } from '@/lib/api';
 import { PasswordField } from '@/components/PasswordField';
 
-export default function AccountPage() {
-  const router = useRouter();
+export default function ProfilePage() {
   const [me, setMe] = useState<any>(null);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -20,7 +17,7 @@ export default function AccountPage() {
 
   function syncSession(data: any) {
     const access = getToken();
-    const refresh = typeof window !== 'undefined' ? localStorage.getItem('is_client_refresh') : null;
+    const refresh = typeof window !== 'undefined' ? localStorage.getItem('is_refresh') : null;
     const session = getUser();
     if (access && refresh && session) {
       setSession(access, refresh, {
@@ -29,6 +26,7 @@ export default function AccountPage() {
         email: data.email,
         phone: data.phone,
         avatarUrl: data.avatarUrl,
+        jobTitle: data.jobTitle,
       });
     }
   }
@@ -93,7 +91,10 @@ export default function AccountPage() {
     setError('');
     setMsg('');
     try {
-      await api('/auth/change-password', { method: 'POST', body: { currentPassword: current, newPassword: next } });
+      await api('/auth/change-password', {
+        method: 'POST',
+        body: { currentPassword: current, newPassword: next },
+      });
       setMsg('Password updated.');
       setCurrent('');
       setNext('');
@@ -104,50 +105,23 @@ export default function AccountPage() {
     }
   }
 
-  if (!me && !error) return <p className="page-loading">Loading account…</p>;
+  if (!me && !error) return <p className="page-loading">Loading profile…</p>;
 
   return (
     <>
       <div className="topbar">
         <div>
-          <h1>Account</h1>
+          <h1>My profile</h1>
+          <p>Update how your name appears across the CMS</p>
         </div>
-        <button
-          type="button"
-          className="btn ghost"
-          onClick={() => {
-            clearSession();
-            router.push('/login');
-          }}
-        >
-          Sign out
-        </button>
       </div>
 
       {error && <p className="error">{error}</p>}
-      {msg && <p style={{ color: 'var(--ok)', fontSize: 13 }}>{msg}</p>}
+      {msg && <p style={{ color: 'var(--ok)', fontSize: 13 }}><strong>{msg}</strong></p>}
 
       {me && (
         <div className="split">
           <form className="card stack" onSubmit={onProfile}>
-            <div className="row" style={{ alignItems: 'center' }}>
-              {me.avatarUrl || me.avatarPath ? (
-                <Image
-                  src={me.avatarUrl || fileUrl(me.avatarPath)}
-                  alt=""
-                  width={64}
-                  height={64}
-                  unoptimized
-                  style={{ borderRadius: 8, objectFit: 'cover' }}
-                />
-              ) : (
-                <div style={{ width: 64, height: 64, borderRadius: 8, background: 'var(--sand)' }} />
-              )}
-              <div>
-                <strong>{me.name}</strong>
-                <div style={{ color: 'var(--muted)', fontSize: 13 }}>{me.email}</div>
-              </div>
-            </div>
             <label className="field">
               Your name
               <input required value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
@@ -156,27 +130,16 @@ export default function AccountPage() {
               Phone
               <input value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="tel" />
             </label>
+            <p style={{ margin: 0, color: 'var(--muted)', fontSize: 13 }}>{me.email} · {String(me.role || '').replaceAll('_', ' ')}</p>
             <button className="btn" type="submit" disabled={profileBusy}>{profileBusy ? 'Saving…' : 'Save profile'}</button>
             <label className="field">
-              Update avatar
+              Profile photo
               <input type="file" accept="image/*" disabled={profileBusy} onChange={onAvatar} />
             </label>
-            {me.organization && (
-              <div style={{ fontSize: 14, lineHeight: 1.6 }}>
-                <div><strong>Organisation</strong></div>
-                <div>{me.organization.name}</div>
-                {me.organization.gstin && <div>GSTIN: {me.organization.gstin}</div>}
-                {me.organization.email && <div>{me.organization.email}</div>}
-              </div>
-            )}
-            <div className="row" style={{ flexWrap: 'wrap', gap: 8 }}>
-              <a className="btn ghost sm" href="/documents">Project files</a>
-              <a className="btn ghost sm" href="/payments">Payment history</a>
-            </div>
           </form>
 
           <form className="card stack" onSubmit={onPassword}>
-            <h3 style={{ margin: 0 }}>Change password</h3>
+            <h3 className="ui" style={{ margin: 0 }}>Change password</h3>
             <PasswordField
               label="Current password"
               required
