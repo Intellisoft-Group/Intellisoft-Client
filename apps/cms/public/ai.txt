@@ -1,0 +1,5 @@
+# Private Intellisoft company workspace.
+# No permission is granted to crawl, scrape, index, summarise, or train
+# machine-learning models on any content from this host.
+User-Agent: *
+Disallow: /

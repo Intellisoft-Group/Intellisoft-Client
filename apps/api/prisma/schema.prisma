@@ -1,0 +1,673 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  FINANCE
+  SUPPORT
+  SALES
+  CLIENT
+}
+
+enum InvoiceType {
+  TAX
+  PROFORMA
+  CREDIT_NOTE
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PARTIAL
+  PAID
+  OVERDUE
+  VOID
+}
+
+enum PaymentGateway {
+  RAZORPAY
+  STRIPE
+  BANK
+  CASH
+  CHEQUE
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+enum BillingCycle {
+  ONE_TIME
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PENDING
+  SUSPENDED
+  EXPIRED
+  CANCELLED
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ProjectStatus {
+  PLANNED
+  IN_PROGRESS
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStageStatus {
+  PLANNED
+  INVOICED
+  PAID
+  VOID
+}
+
+enum DocumentType {
+  CONTRACT
+  QUOTE
+  REPORT
+  TAX
+  LOGO
+  BRIEF
+  ASSET
+  OTHER
+}
+
+enum ServiceRequestStatus {
+  NEW
+  REVIEWING
+  QUOTED
+  ACCEPTED
+  DECLINED
+}
+
+enum NotificationType {
+  INVOICE_DUE
+  PAYMENT_SUCCESS
+  TICKET_REPLY
+  ANNOUNCEMENT
+  PROJECT_UPDATE
+  SERVICE_REQUEST
+  CHAT_MESSAGE
+}
+
+enum ChatThreadKind {
+  ORGANIZATION
+  PROJECT
+}
+
+enum DocumentSource {
+  CLIENT
+  STAFF
+}
+
+enum PunchType {
+  IN
+  OUT
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ChatMessageKind {
+  TEXT
+  POLL
+}
+
+model User {
+  id                  String    @id @default(cuid())
+  email               String    @unique
+  passwordHash        String
+  name                String
+  phone               String?
+  role                Role
+  jobTitle            String?
+  avatarPath          String?
+  organizationId      String?
+  organization        Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  isActive            Boolean   @default(true)
+  mustChangePassword  Boolean   @default(false)
+  expoPushToken       String?
+  refreshTokenHash    String?
+  resetToken          String?
+  resetTokenExpires   DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  assignedTickets     Ticket[]  @relation("TicketAssignee")
+  ticketMessages      TicketMessage[]
+  notifications       Notification[]
+  projectMemberships  ProjectMember[]
+  chatMessages        ChatMessage[]
+  documents           Document[]
+  punches             AttendancePunch[]
+  leaveRequests       LeaveRequest[]
+  pollVotes           ChatPollVote[]
+  chatReads           ChatRead[]
+  chatReactions       ChatReaction[]
+  salesClients        Organization[]        @relation("OrgSalesPerson")
+  soldSubscriptions   ServiceSubscription[] @relation("SubscriptionSoldBy")
+
+  @@index([organizationId])
+  @@index([role, isActive])
+}
+
+model JobTitle {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
+model Organization {
+  id              String    @id @default(cuid())
+  name            String
+  legalName       String?
+  gstin           String?
+  pan             String?
+  email           String?
+  phone           String?
+  billingAddress  String?
+  city            String?
+  state           String?
+  pincode         String?
+  country         String    @default("India")
+  placeOfSupply   String?
+  notes           String?
+  salesPersonId   String?
+  salesPerson     User?     @relation("OrgSalesPerson", fields: [salesPersonId], references: [id], onDelete: SetNull)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  users           User[]
+  subscriptions   ServiceSubscription[]
+  invoices        Invoice[]
+  payments        Payment[]
+  tickets         Ticket[]
+  projects        Project[]
+  documents       Document[]
+  serviceRequests ServiceRequest[]
+  notifications   Notification[]
+  chatThreads     ChatThread[]
+
+  @@index([salesPersonId])
+}
+
+model ServiceCatalog {
+  id           String       @id @default(cuid())
+  name         String
+  slug         String       @unique
+  description  String?
+  category     String
+  sacCode      String?
+  price        Decimal
+  currency     String       @default("INR")
+  taxPercent   Decimal
+  billingCycle BillingCycle @default(YEARLY)
+  isPublished  Boolean      @default(true)
+  features     Json?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  subscriptions ServiceSubscription[]
+  serviceRequests ServiceRequest[]
+}
+
+model ServiceSubscription {
+  id             String             @id @default(cuid())
+  organizationId String
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  catalogId      String
+  catalog        ServiceCatalog     @relation(fields: [catalogId], references: [id])
+  status         SubscriptionStatus @default(ACTIVE)
+  startDate      DateTime
+  renewalDate    DateTime?
+  slaNotes       String?
+  customPrice    Decimal?
+  notes          String?
+  soldById       String?
+  soldBy         User?              @relation("SubscriptionSoldBy", fields: [soldById], references: [id], onDelete: SetNull)
+  soldAt         DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  tickets        Ticket[]
+
+  @@index([organizationId, status])
+  @@index([renewalDate])
+  @@index([soldById])
+}
+
+model Invoice {
+  id             String        @id @default(cuid())
+  number         String        @unique
+  type           InvoiceType   @default(TAX)
+  status         InvoiceStatus @default(DRAFT)
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  projectId      String?
+  project        Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  currency       String        @default("INR")
+  subtotal       Decimal
+  cgst           Decimal       @default(0)
+  sgst           Decimal       @default(0)
+  igst           Decimal       @default(0)
+  total          Decimal
+  amountPaid     Decimal       @default(0)
+  amountDue      Decimal
+  issueDate      DateTime      @default(now())
+  dueDate        DateTime
+  notes          String?
+  pdfPath        String?
+  payToken       String?       @unique
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  lines          InvoiceLine[]
+  payments       Payment[]
+  tickets        Ticket[]
+  paymentStage   PaymentStage?
+
+  @@index([organizationId, status])
+  @@index([projectId])
+  @@index([dueDate])
+  @@index([status, dueDate])
+}
+
+model InvoiceLine {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  description String
+  sacCode     String?
+  quantity    Decimal  @default(1)
+  unitPrice   Decimal
+  taxPercent  Decimal
+  amount      Decimal
+}
+
+model Payment {
+  id                String          @id @default(cuid())
+  invoiceId         String
+  invoice           Invoice         @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  organizationId    String
+  organization      Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  gateway           PaymentGateway
+  status            PaymentStatus   @default(PENDING)
+  amount            Decimal
+  currency          String          @default("INR")
+  gatewayOrderId    String?
+  gatewayPaymentId  String?
+  clientSecret      String?
+  utr               String?
+  notes             String?
+  receiptPath       String?
+  paidAt            DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([organizationId, status])
+  @@index([invoiceId])
+  @@index([gatewayOrderId])
+  @@index([gatewayPaymentId])
+}
+
+model Ticket {
+  id             String         @id @default(cuid())
+  number         String         @unique
+  organizationId String
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subscriptionId String?
+  subscription   ServiceSubscription? @relation(fields: [subscriptionId], references: [id])
+  invoiceId      String?
+  invoice        Invoice?       @relation(fields: [invoiceId], references: [id])
+  assigneeId     String?
+  assignee       User?          @relation("TicketAssignee", fields: [assigneeId], references: [id])
+  subject        String
+  status         TicketStatus   @default(OPEN)
+  priority       TicketPriority @default(MEDIUM)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  messages       TicketMessage[]
+
+  @@index([organizationId, status])
+  @@index([assigneeId, status])
+}
+
+model TicketMessage {
+  id         String   @id @default(cuid())
+  ticketId   String
+  ticket     Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId   String
+  author     User     @relation(fields: [authorId], references: [id])
+  body       String
+  attachment String?
+  createdAt  DateTime @default(now())
+
+  @@index([ticketId, createdAt])
+}
+
+model Project {
+  id             String        @id @default(cuid())
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  description    String?
+  status         ProjectStatus @default(PLANNED)
+  contractAmount Decimal?
+  currency       String        @default("INR")
+  taxPercent     Decimal       @default(18)
+  startDate      DateTime?
+  dueDate        DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  milestones     Milestone[]
+  updates        ProjectUpdate[]
+  members        ProjectMember[]
+  documents      Document[]
+  chatThread     ChatThread?
+  paymentStages  PaymentStage[]
+  invoices       Invoice[]
+
+  @@index([organizationId, status])
+}
+
+model PaymentStage {
+  id          String             @id @default(cuid())
+  projectId   String
+  project     Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title       String
+  percent     Decimal
+  amount      Decimal
+  sortOrder   Int                @default(0)
+  status      PaymentStageStatus @default(PLANNED)
+  dueDate     DateTime?
+  invoiceId   String?            @unique
+  invoice     Invoice?           @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([projectId, sortOrder])
+}
+
+model Milestone {
+  id          String    @id @default(cuid())
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  dueDate     DateTime?
+  completed   Boolean   @default(false)
+  sortOrder   Int       @default(0)
+}
+
+model ProjectUpdate {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  body      String
+  createdAt DateTime @default(now())
+}
+
+model ProjectMember {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, userId])
+}
+
+model ChatThread {
+  id             String         @id @default(cuid())
+  kind           ChatThreadKind
+  organizationId String
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  projectId      String?        @unique
+  project        Project?       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  pinnedMessageId  String?
+  messages         ChatMessage[]
+  reads            ChatRead[]
+
+  @@index([organizationId, kind])
+}
+
+model ChatMessage {
+  id             String          @id @default(cuid())
+  threadId       String
+  thread         ChatThread      @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  authorId       String
+  author         User            @relation(fields: [authorId], references: [id])
+  kind           ChatMessageKind @default(TEXT)
+  body           String          @default("")
+  attachmentPath String?
+  fileName       String?
+  mimeType       String?
+  replyToId      String?
+  replyTo        ChatMessage?    @relation("ChatReply", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies        ChatMessage[]   @relation("ChatReply")
+  editedAt       DateTime?
+  deletedAt      DateTime?
+  pollMultiple   Boolean         @default(false)
+  pollClosed     Boolean         @default(false)
+  createdAt      DateTime        @default(now())
+  pollOptions    ChatPollOption[]
+  reactions      ChatReaction[]
+
+  @@index([threadId, createdAt])
+  @@index([threadId, deletedAt])
+}
+
+model ChatReaction {
+  id        String      @id @default(cuid())
+  messageId String
+  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emoji     String
+  createdAt DateTime    @default(now())
+
+  @@unique([messageId, userId, emoji])
+}
+
+model ChatPollOption {
+  id        String         @id @default(cuid())
+  messageId String
+  message   ChatMessage    @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  text      String
+  sortOrder Int            @default(0)
+  votes     ChatPollVote[]
+}
+
+model ChatPollVote {
+  id       String         @id @default(cuid())
+  optionId String
+  option   ChatPollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([optionId, userId])
+}
+
+model ChatRead {
+  threadId   String
+  thread     ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastReadAt DateTime   @default(now())
+
+  @@id([threadId, userId])
+}
+
+model Document {
+  id             String         @id @default(cuid())
+  organizationId String
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  projectId      String?
+  project        Project?       @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  uploadedById   String?
+  uploadedBy     User?          @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  title          String
+  type           DocumentType   @default(OTHER)
+  source         DocumentSource @default(STAFF)
+  filePath       String
+  fileName       String?
+  mimeType       String?
+  createdAt      DateTime       @default(now())
+
+  @@index([organizationId, projectId])
+}
+
+model ServiceRequest {
+  id             String                @id @default(cuid())
+  organizationId String
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  catalogId      String?
+  catalog        ServiceCatalog?       @relation(fields: [catalogId], references: [id])
+  kind           String                @default("NEW")
+  message        String
+  status         ServiceRequestStatus  @default(NEW)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  @@index([organizationId, status])
+}
+
+model AppBanner {
+  id        String   @id @default(cuid())
+  title     String
+  body      String?
+  imageUrl  String?
+  linkUrl   String?
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model Announcement {
+  id        String   @id @default(cuid())
+  title     String
+  body      String
+  isPinned  Boolean  @default(false)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model Faq {
+  id        String   @id @default(cuid())
+  question  String
+  answer    String
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+}
+
+model CmsPage {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  title     String
+  body      String
+  updatedAt DateTime @updatedAt
+}
+
+model AppSettings {
+  id              String  @id @default("default")
+  companyName     String  @default("Intellisoft")
+  legalName       String  @default("Intellisoft")
+  gstin           String?
+  pan             String?
+  email           String?
+  phone           String?
+  address         String?
+  city            String?
+  state           String  @default("Karnataka")
+  pincode         String?
+  country         String  @default("India")
+  bankName        String?
+  bankAccount     String?
+  bankIfsc        String?
+  bankBranch      String?
+  logoUrl         String?
+  primaryColor    String  @default("#0D9488")
+  splashCopy      String  @default("Manage services, invoices and payments")
+  maintenanceMode Boolean @default(false)
+  minAppVersion   String  @default("1.0.0")
+  chargesTax        Boolean @default(false)
+  defaultTaxPercent Decimal @default(18)
+  razorpayKeyId   String?
+  stripePublishableKey String?
+}
+
+model AttendancePunch {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      PunchType
+  at        DateTime  @default(now())
+  note      String?
+  source    String    @default("WEB")
+
+  @@index([userId, at])
+}
+
+model LeaveRequest {
+  id        String      @id @default(cuid())
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fromDate  DateTime
+  toDate    DateTime
+  reason    String
+  status    LeaveStatus @default(PENDING)
+  createdAt DateTime    @default(now())
+
+  @@index([userId, status])
+}
+
+model Notification {
+  id             String           @id @default(cuid())
+  userId         String?
+  user           User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String?
+  organization   Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  type           NotificationType
+  title          String
+  body           String
+  /** Optional link to source entity (e.g. chat message id) so deletes can clean the bell list. */
+  refId          String?
+  read           Boolean          @default(false)
+  createdAt      DateTime         @default(now())
+
+  @@index([organizationId, read, createdAt])
+  @@index([userId, read, createdAt])
+  @@index([type, refId])
+}

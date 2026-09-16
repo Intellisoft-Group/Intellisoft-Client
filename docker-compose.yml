@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: intellisoft-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: intellisoft
+      POSTGRES_PASSWORD: intellisoft
+      POSTGRES_DB: intellisoft
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - intellisoft_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U intellisoft -d intellisoft"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  intellisoft_pg:

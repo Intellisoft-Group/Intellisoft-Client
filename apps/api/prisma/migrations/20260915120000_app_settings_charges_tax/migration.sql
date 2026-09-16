@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "AppSettings" ADD COLUMN IF NOT EXISTS "chargesTax" BOOLEAN NOT NULL DEFAULT false;

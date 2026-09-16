@@ -1,0 +1,20 @@
+node_modules
+dist
+.next
+.expo
+.turbo
+*.log
+.env
+.env.local
+.env.production
+apps/api/uploads
+apps/api/prisma/*.db
+apps/api/prisma/*.db-journal
+# Local private mobile client (not published)
+apps/android/
+backups/
+coverage
+.DS_Store
+Thumbs.db
+*.tsbuildinfo
+expo-env.d.ts
